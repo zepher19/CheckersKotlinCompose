@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,9 +22,12 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlin.math.absoluteValue
 
 
 var boardModel = BoardModel()
+
+var previousHighlightedSquare = boardModel.currentBoard[0][0]
 
 
 class MainActivity : ComponentActivity() {
@@ -40,71 +41,167 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun Board() {
-
-
     val borderWidth = 4.dp
 
     Column(modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally) {
 
-        for (x in boardModel.currentBoard)
+        //while loops to iterate through only partial board avoiding the padding
+        var i = 1
+        while (i < 9) {
 
+            var x = boardModel.currentBoard[i]
             Row {
-            for (y in x) {
 
-                val modifierHighlight = Modifier
-                    .size(40.dp)
-                    .clickable {
-                        boardModel.unhighlight()
-                        y.highlighted.value = true
-                    }
-                    .border(BorderStroke(borderWidth, Color.Yellow), RectangleShape)
-                    .padding(borderWidth)
-                    .clip(RectangleShape)
+                var j = 1
+                while (j < 9) {
+                    var y = x[j]
+                    val modifierHighlight = Modifier
+                        .size(40.dp)
+                        .clickable {
+                            highlightSquares(y)
+                        }
+                        .border(BorderStroke(borderWidth, Color.Yellow), RectangleShape)
+                        .padding(borderWidth)
+                        .clip(RectangleShape)
 
+                    val modifierNormal = Modifier
+                        .size(40.dp)
+                        .clickable {
+                            highlightSquares(y)
+                        }
 
-                val modifierNormal = Modifier
-                    .size(40.dp)
-                    .clickable {
-                        boardModel.unhighlight()
-                        y.highlighted.value = true
-                    }
+                    val modifierRedSquare = Modifier
+                        .size(40.dp)
 
-                val modifierRedSquare = Modifier
-                    .size(40.dp)
-
-                var modifierToUse: Modifier
-
-
-                if (y.highlighted.value)
-                    modifierToUse = modifierHighlight
-                else if (y.drawableID == R.drawable.blacksquare)
-                    modifierToUse = modifierNormal
-                else
-                    modifierToUse = modifierRedSquare
+                    var modifierToUse: Modifier
 
 
-                if (y.drawableID == R.drawable.blacksquare)
+                    if (y.highlighted.value)
+                        modifierToUse = modifierHighlight
+                    else if (y.drawableID == R.drawable.redpiece || y.drawableID == R.drawable.whitepiece)
+                        modifierToUse = modifierNormal
+                    else
+                        modifierToUse = modifierRedSquare
+
+                    var drawableID = y.drawableID
+
                     Image(
-                        painter = painterResource(id = R.drawable.blacksquare),
-                        contentDescription = "Black Square",
+                        painter = painterResource(id = drawableID),
+                        contentDescription = "draw square",
                         modifierToUse
                     )
-                else
-                    Image(
-                        painter = painterResource(id = R.drawable.redsquare),
-                        contentDescription = "Red Square",
-                        modifierToUse
-                    )
+                    j++
+                }
             }
+            i++
         }
     }
 }
 
+fun highlightSquares(y: Square) {
 
-fun highlight() {
+    if (previousHighlightedSquare == boardModel.currentBoard[0][0])
+        previousHighlightedSquare = y
 
+    //if already highlighted, move instead
+    if (y.highlighted.value) {
+        movePiece(y)
+        return
+    }
+
+    boardModel.unhighlight()
+    y.highlighted.value = true
+
+    highlightMoves(y)
+
+}
+
+fun movePiece(y: Square) {
+    //draw piece in new spot
+    boardModel.currentBoard[y.row][y.index].drawableID = previousHighlightedSquare.drawableID
+
+    //delete piece from old spot
+    boardModel.currentBoard[previousHighlightedSquare.row][previousHighlightedSquare.index].drawableID = R.drawable.blacksquare
+
+
+    if (previousHighlightedSquare.row - y.row == 2 || previousHighlightedSquare.row - y.row == -2)
+        deletePiece(y)
+
+    //unhighlight after move
+    boardModel.unhighlight()
+
+    //reset previous highlighted square
+    previousHighlightedSquare = boardModel.currentBoard[0][0]
+}
+
+fun deletePiece(y: Square) {
+    var rowToDelete = ((previousHighlightedSquare.row + y.row) / 2).absoluteValue
+    var indexToDelete = ((previousHighlightedSquare.index + y.index) / 2).absoluteValue
+
+    boardModel.currentBoard[rowToDelete][indexToDelete].drawableID = R.drawable.blacksquare
+}
+
+fun highlightMoves(y: Square) {
+
+    //redpiece
+    if (y.drawableID == R.drawable.redpiece) {
+
+        var nearEnemy  = false
+
+        //if there is a white piece adjacent
+        if (boardModel.currentBoard[y.row - 1][y.index - 1].drawableID == R.drawable.whitepiece) {
+            if (boardModel.currentBoard[y.row - 2][y.index - 2].drawableID == R.drawable.blacksquare) {
+                boardModel.currentBoard[y.row - 2][y.index - 2].highlighted.value = true
+                nearEnemy = true
+            }
+        }
+        if (boardModel.currentBoard[y.row - 1][y.index + 1].drawableID == R.drawable.whitepiece) {
+            if (boardModel.currentBoard[y.row - 2][y.index + 2].drawableID == R.drawable.blacksquare) {
+                boardModel.currentBoard[y.row - 2][y.index + 2].highlighted.value = true
+                nearEnemy = true
+            }
+        }
+
+
+        if (!nearEnemy) {
+            //highlight adjacent black square
+            if (boardModel.currentBoard[y.row - 1][y.index - 1].drawableID == R.drawable.blacksquare)
+                boardModel.currentBoard[y.row - 1][y.index - 1].highlighted.value = true
+            if (boardModel.currentBoard[y.row - 1][y.index + 1].drawableID == R.drawable.blacksquare)
+                boardModel.currentBoard[y.row - 1][y.index + 1].highlighted.value = true
+        }
+    }
+
+    //whitepiece
+    if (y.drawableID == R.drawable.whitepiece) {
+
+        var nearEnemy1  = false
+
+        //if there is a red piece adjacent
+        if (boardModel.currentBoard[y.row + 1][y.index - 1].drawableID == R.drawable.redpiece) {
+            if (boardModel.currentBoard[y.row + 2][y.index - 2].drawableID == R.drawable.blacksquare) {
+                boardModel.currentBoard[y.row + 2][y.index - 2].highlighted.value = true
+                nearEnemy1 = true
+            }
+        }
+        if (boardModel.currentBoard[y.row + 1][y.index + 1].drawableID == R.drawable.redpiece) {
+            if (boardModel.currentBoard[y.row + 2][y.index + 2].drawableID == R.drawable.blacksquare) {
+                boardModel.currentBoard[y.row + 2][y.index + 2].highlighted.value = true
+                nearEnemy1 = true
+            }
+        }
+
+
+        if (!nearEnemy1) {
+            //highlight adjacent black square
+            if (boardModel.currentBoard[y.row + 1][y.index - 1].drawableID == R.drawable.blacksquare)
+                boardModel.currentBoard[y.row + 1][y.index - 1].highlighted.value = true
+            if (boardModel.currentBoard[y.row + 1][y.index + 1].drawableID == R.drawable.blacksquare)
+                boardModel.currentBoard[y.row + 1][y.index + 1].highlighted.value = true
+        }
+    }
 }
 
 
